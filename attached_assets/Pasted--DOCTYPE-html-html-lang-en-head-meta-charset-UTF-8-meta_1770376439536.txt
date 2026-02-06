@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Varia - AI Financial Analysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <style>
+        body {
+            background: linear-gradient(to bottom right, #0f172a, #1e3a8a, #0f172a);
+            min-height: 100vh;
+        }
+    </style>
+</head>
+<body class="p-6">
+    <div id="app"></div>
+
+    <script>
+        let step = 'input';
+        let financialData = {
+            period: '', revenue: '', cogs: '', opex: '',
+            assets: '', liabilities: '', equity: '',
+            cashOps: '', cashInv: '', cashFin: ''
+        };
+        let analysis = null;
+        let loading = false;
+        let includeSummary = false;
+
+        function handleInput(field, value) {
+            financialData[field] = value;
+        }
+
+        // --- STRIP MARKDOWN SYMBOLS ---
+        const cleanFormatting = (text) => {
+            if (!text) return "";
+            return text
+                .replace(/###\s?/g, '') // Remove ###
+                .replace(/\*\*/g, '')   // Remove **
+                .trim();
+        };
+
+        // --- ROBUST FILE UPLOAD ---
+        async function handleFileUpload(file) {
+            if (!file) return;
+            loading = true;
+            render();
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const base64 = e.target.result.split(',')[1];
+                    const mediaType = file.type || (file.name.endsWith('.pdf') ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+                    const response = await fetch('https://billbotprocessing.app.n8n.cloud/webhook/financial-parser', {
+                        method: 'POST',
+                        body: JSON.stringify({ file: base64, mediaType: mediaType, fileName: file.name }),
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+
+                    const data = await response.json();
+                    console.log("Cleaned Data from n8n:", data); // This should now show your raw numbers
+                    
+                    if (data && typeof data === 'object') {
+                        // Map the extracted data to form fields
+                        Object.keys(financialData).forEach(key => {
+                            if (data[key]) financialData[key] = data[key];
+                        });
+                        alert('Data extracted! Please verify the fields below.');
+                    }
+                } catch (error) {
+                    console.error("Upload Error:", error);
+                    alert('Extraction failed. Please enter data manually below.');
+                } finally {
+                    loading = false;
+                    render();
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function calculateRatios(data) {
+            const revenue = parseFloat(data.revenue) || 0;
+            const cogs = parseFloat(data.cogs) || 0;
+            const opex = parseFloat(data.opex) || 0;
+            const assets = parseFloat(data.assets) || 0;
+            const liabilities = parseFloat(data.liabilities) || 0;
+            const equity = parseFloat(data.equity) || 0;
+
+            const netIncome = revenue - cogs - opex;
+            const grossMargin = revenue > 0 ? ((revenue - cogs) / revenue * 100) : 0;
+            const netMargin = revenue > 0 ? (netIncome / revenue * 100) : 0;
+            const currentRatio = liabilities > 0 ? (assets / liabilities) : 0;
+            const debtToEquity = equity > 0 ? (liabilities / equity) : 0;
+            const roe = equity > 0 ? (netIncome / equity * 100) : 0;
+
+            return {
+                netIncome,
+                grossMargin,
+                netMargin,
+                currentRatio,
+                debtToEquity,
+                roe
+            };
+        }
+
+        async function analyzeFinancials() {
+            loading = true;
+            render();
+            const ratios = calculateRatios(financialData);
+
+            try {
+                const response = await fetch('https://billbotprocessing.app.n8n.cloud/webhook/varia-analysis', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ period: financialData.period, financialData, ratios, includeSummary })
+                });
+
+                const result = await response.json();
+                analysis = { 
+                    ratios, 
+                    insights: cleanFormatting(result.insights), 
+                    summary: cleanFormatting(result.summary), 
+                    data: financialData 
+                };
+                step = 'results';
+            } catch (error) {
+                alert('Analysis failed. Check your n8n workflow.');
+            } finally {
+                loading = false;
+                render();
+            }
+        }
+
+        function exportReport() {
+            if (!analysis) return;
+            
+            const report = `VARIA FINANCIAL ANALYSIS REPORT
+Period: ${financialData.period}
+Generated: ${new Date().toLocaleDateString()}
+
+═══════════════════════════════════════
+
+FINANCIAL STATEMENTS SUMMARY
+
+Income Statement:
+  Revenue: ${financialData.revenue}
+  COGS: ${financialData.cogs}
+  Operating Expenses: ${financialData.opex}
+  Net Income: ${analysis.ratios.netIncome.toFixed(2)}
+
+Balance Sheet:
+  Total Assets: ${financialData.assets}
+  Total Liabilities: ${financialData.liabilities}
+  Total Equity: ${financialData.equity}
+
+Cash Flow Statement:
+  Operating Activities: ${financialData.cashOps}
+  Investing Activities: ${financialData.cashInv}
+  Financing Activities: ${financialData.cashFin}
+
+═══════════════════════════════════════
+
+KEY FINANCIAL RATIOS
+
+Profitability:
+  Gross Margin: ${analysis.ratios.grossMargin.toFixed(1)}%
+  Net Margin: ${analysis.ratios.netMargin.toFixed(1)}%
+  Return on Equity: ${analysis.ratios.roe.toFixed(1)}%
+
+Liquidity & Solvency:
+  Current Ratio: ${analysis.ratios.currentRatio.toFixed(2)}
+  Debt-to-Equity: ${analysis.ratios.debtToEquity.toFixed(2)}
+
+═══════════════════════════════════════
+
+AI-POWERED ANALYSIS
+
+${analysis.insights}
+
+${analysis.summary ? `
+═══════════════════════════════════════
+
+EXECUTIVE SUMMARY REPORT
+
+${analysis.summary}
+` : ''}
+
+═══════════════════════════════════════
+
+End of Report`;
+
+            const blob = new Blob([report], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `varia-analysis-${financialData.period || 'report'}.txt`;
+            a.click();
+        }
+
+        function renderInputScreen() {
+            return `
+                <div class="max-w-4xl mx-auto">
+                    <div class="text-center mb-8">
+                        <h1 class="text-5xl font-bold text-white mb-2">Varia</h1>
+                        <p class="text-blue-200">AI-Powered Financial Analysis</p>
+                    </div>
+
+                    <div class="bg-white/10 backdrop-blur-lg rounded-2xl p-8 shadow-2xl border border-white/20">
+                        <div class="flex items-center gap-2 mb-6">
+                            <svg class="text-blue-400" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                                <polyline points="10 9 9 9 8 9"></polyline>
+                            </svg>
+                            <h2 class="text-2xl font-semibold text-white">Financial Data Input</h2>
+                        </div>
+
+                        <!-- Quick Fill Upload Section -->
+                        <div class="mb-8 bg-gradient-to-r from-purple-900/30 to-blue-900/30 border-2 border-dashed border-purple-400/50 rounded-xl p-6">
+                            <div class="flex items-start gap-4">
+                                <svg class="text-purple-400 flex-shrink-0 mt-1" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                </svg>
+                                <div class="flex-1">
+                                    <h3 class="text-lg font-semibold text-white mb-2">Quick Fill from Document</h3>
+                                    <p class="text-sm text-blue-200 mb-4">Upload your Excel or PDF financial statement and we'll auto-fill the fields below. You can then review and adjust any values.</p>
+                                    <label class="cursor-pointer">
+                                        <input type="file" accept=".xlsx,.xls,.pdf" onchange="handleFileUpload(this.files[0])" class="hidden" ${loading ? 'disabled' : ''}>
+                                        <span class="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all inline-flex items-center gap-2">
+                                            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                                <polyline points="17 8 12 3 7 8"></polyline>
+                                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                                            </svg>
+                                            ${loading ? 'Processing...' : 'Choose File'}
+                                        </span>
+                                    </label>
+                                    <p class="text-xs text-purple-300 mt-2">Supports: Excel (.xlsx, .xls) and PDF files</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Manual Entry Fields -->
+                        <div class="space-y-6">
+                                <div>
+                                    <label class="block text-sm font-medium text-blue-200 mb-2">Period</label>
+                                    <input type="text" placeholder="e.g., Q4 2024" value="${financialData.period}" 
+                                        oninput="handleInput('period', this.value)"
+                                        class="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+
+                                <div class="grid md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-blue-200 mb-2">Revenue ($)</label>
+                                        <input type="number" value="${financialData.revenue}" 
+                                            oninput="handleInput('revenue', this.value)"
+                                            class="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-blue-200 mb-2">COGS ($)</label>
+                                        <input type="number" value="${financialData.cogs}" 
+                                            oninput="handleInput('cogs', this.value)"
+                                            class="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-blue-200 mb-2">Operating Expenses ($)</label>
+                                        <input type="number" value="${financialData.opex}" 
+                                            oninput="handleInput('opex', this.value)"
+                                            class="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    </div>
+                                </div>
+
+                                <div class="grid md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-blue-200 mb-2">Total Assets ($)</label>
+                                        <input type="number" value="${financialData.assets}" 
+                                            oninput="handleInput('assets', this.value)"
+                                            class="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-blue-200 mb-2">Total Liabilities ($)</label>
+                                        <input type="number" value="${financialData.liabilities}" 
+                                            oninput="handleInput('liabilities', this.value)"
+                                            class="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-blue-200 mb-2">Total Equity ($)</label>
+                                        <input type="number" value="${financialData.equity}" 
+                                            oninput="handleInput('equity', this.value)"
+                                            class="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    </div>
+                                </div>
+
+                                <div class="grid md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-blue-200 mb-2">Operating Cash Flow ($)</label>
+                                        <input type="number" value="${financialData.cashOps}" 
+                                            oninput="handleInput('cashOps', this.value)"
+                                            class="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-blue-200 mb-2">Investing Cash Flow ($)</label>
+                                        <input type="number" value="${financialData.cashInv}" 
+                                            oninput="handleInput('cashInv', this.value)"
+                                            class="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-blue-200 mb-2">Financing Cash Flow ($)</label>
+                                        <input type="number" value="${financialData.cashFin}" 
+                                            oninput="handleInput('cashFin', this.value)"
+                                            class="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    </div>
+                                </div>
+
+                                <div class="bg-white/5 border border-white/20 rounded-lg p-4">
+                                    <label class="flex items-center gap-3 cursor-pointer">
+                                        <input type="checkbox" ${includeSummary ? 'checked' : ''} 
+                                            onchange="includeSummary = this.checked; render();"
+                                            class="w-5 h-5 rounded border-white/20 bg-white/5 text-blue-600 focus:ring-2 focus:ring-blue-500">
+                                        <div>
+                                            <span class="text-white font-medium">Include Executive Summary Report</span>
+                                            <p class="text-sm text-blue-300">Generate a comprehensive summary document with detailed analysis</p>
+                                        </div>
+                                    </label>
+                                </div>
+
+                                <button onclick="analyzeFinancials()" ${loading ? 'disabled' : ''}
+                                    class="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                                    ${loading ? 'Processing...' : `
+                                        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                        </svg>
+                                        Analyze with AI
+                                    `}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderResultsScreen() {
+            // Function to convert simple Markdown to Tailwind-styled HTML
+            const formatFinancialText = (text) => {
+                if (!text) return '';
+                return text
+                    .replace(/\n/g, '<br>') // Handle line breaks
+                    .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-bold">$1</strong>') // Bold text
+                    .replace(/- /g, '<li class="ml-4 mb-2">') // Simple bullet points
+            };
+
+            return `
+                <div class="max-w-6xl mx-auto">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h1 class="text-4xl font-bold text-white">Analysis Results</h1>
+                            <p class="text-blue-200">Period: ${financialData.period}</p>
+                        </div>
+                        <div class="flex gap-3">
+                            <button onclick="exportReport()" class="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-all flex items-center gap-2">
+                                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                </svg>
+                                Export Report
+                            </button>
+                            <button onclick="step = 'input'; render();" class="bg-white/10 text-white px-6 py-3 rounded-lg font-semibold hover:bg-white/20 transition-all">
+                                New Analysis
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="grid md:grid-cols-3 gap-4 mb-6">
+                        <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+                            <div class="flex items-center gap-3 mb-2">
+                                <svg class="text-green-400" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <line x1="12" y1="1" x2="12" y2="23"></line>
+                                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                </svg>
+                                <h3 class="text-lg font-semibold text-white">Net Income</h3>
+                            </div>
+                            <p class="text-3xl font-bold text-white">$${analysis.ratios.netIncome.toFixed(2)}</p>
+                            <p class="text-sm text-blue-200 mt-1">Net Margin: ${analysis.ratios.netMargin.toFixed(1)}%</p>
+                        </div>
+
+                        <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+                            <div class="flex items-center gap-3 mb-2">
+                                <svg class="text-blue-400" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+                                    <polyline points="16 7 22 7 22 13"></polyline>
+                                </svg>
+                                <h3 class="text-lg font-semibold text-white">Current Ratio</h3>
+                            </div>
+                            <p class="text-3xl font-bold text-white">${analysis.ratios.currentRatio.toFixed(2)}</p>
+                            <p class="text-sm text-blue-200 mt-1">Liquidity Health</p>
+                        </div>
+
+                        <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+                            <div class="flex items-center gap-3 mb-2">
+                                <svg class="text-purple-400" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                </svg>
+                                <h3 class="text-lg font-semibold text-white">Debt-to-Equity</h3>
+                            </div>
+                            <p class="text-3xl font-bold text-white">${analysis.ratios.debtToEquity.toFixed(2)}</p>
+                            <p class="text-sm text-blue-200 mt-1">Leverage Ratio</p>
+                        </div>
+                    </div>
+
+                    <div class="grid md:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+                            <h3 class="text-xl font-semibold text-white mb-4">Balance Sheet Distribution</h3>
+                            <canvas id="pieChart" width="300" height="300"></canvas>
+                        </div>
+
+                        <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+                            <h3 class="text-xl font-semibold text-white mb-4">Cash Flow Analysis</h3>
+                            <canvas id="barChart" width="300" height="300"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="space-y-6">
+                        <div class="bg-white/5 border border-white/10 rounded-xl p-6 transition-all hover:bg-white/10">
+                            <h3 class="text-xl font-bold text-blue-400 mb-4 flex items-center gap-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                Key Insights
+                            </h3>
+                            <div class="text-blue-100 space-y-4">
+                                ${formatFinancialText(analysis.insights)}
+                            </div>
+                        </div>
+
+                        ${analysis.summary ? `
+                        <div class="bg-gradient-to-br from-slate-900 to-blue-900 border border-blue-500/30 rounded-xl p-6 shadow-xl">
+                            <h3 class="text-lg font-semibold text-blue-200 mb-2 uppercase tracking-wider">Executive Report</h3>
+                            <div class="text-white leading-relaxed italic">
+                                "${formatFinancialText(analysis.summary)}"
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        function render() {
+            const app = document.getElementById('app');
+            if (step === 'input') {
+                app.innerHTML = renderInputScreen();
+            } else if (step === 'results') {
+                app.innerHTML = renderResultsScreen();
+                setTimeout(() => {
+                    renderCharts();
+                }, 100);
+            }
+        }
+
+        function renderCharts() {
+            const pieCtx = document.getElementById('pieChart');
+            const barCtx = document.getElementById('barChart');
+
+            if (pieCtx) {
+                new Chart(pieCtx, {
+                    type: 'pie',
+                    data: {
+                        labels: ['Assets', 'Liabilities', 'Equity'],
+                        datasets: [{
+                            data: [
+                                parseFloat(financialData.assets),
+                                parseFloat(financialData.liabilities),
+                                parseFloat(financialData.equity)
+                            ],
+                            backgroundColor: ['#3b82f6', '#8b5cf6', '#ec4899']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: '#fff'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            if (barCtx) {
+                new Chart(barCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Operating', 'Investing', 'Financing'],
+                        datasets: [{
+                            label: 'Cash Flow',
+                            data: [
+                                parseFloat(financialData.cashOps),
+                                parseFloat(financialData.cashInv),
+                                parseFloat(financialData.cashFin)
+                            ],
+                            backgroundColor: '#3b82f6'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        scales: {
+                            y: {
+                                ticks: { color: '#fff' },
+                                grid: { color: '#ffffff20' }
+                            },
+                            x: {
+                                ticks: { color: '#fff' },
+                                grid: { color: '#ffffff20' }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: '#fff'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        render();
+    </script>
+</body>
+</html>
