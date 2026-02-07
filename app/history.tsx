@@ -68,7 +68,7 @@ function HistoryItem({
               { backgroundColor: isPositive ? Colors.success : Colors.error },
             ]}
           />
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.historyPeriod}>
               {item.financialData.period || "No Period"}
             </Text>
@@ -77,7 +77,33 @@ function HistoryItem({
             </Text>
           </View>
         </View>
-        <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+        <View style={styles.historyItemActions}>
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation?.();
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              Alert.alert(
+                "Delete Analysis",
+                "Remove this analysis from history?",
+                [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: () => onDelete(item.id),
+                  },
+                ]
+              );
+            }}
+            style={({ pressed }) => [
+              styles.deleteBtn,
+              pressed && { opacity: 0.7 },
+            ]}
+          >
+            <Ionicons name="trash-outline" size={16} color={Colors.error} />
+          </Pressable>
+          <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+        </View>
       </View>
 
       <View style={styles.historyMetrics}>
@@ -279,6 +305,21 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+    flex: 1,
+  },
+  historyItemActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginLeft: 8,
+  },
+  deleteBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: Colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
   },
   historyDot: {
     width: 8,
