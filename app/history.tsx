@@ -5,6 +5,7 @@ import {
   View,
   FlatList,
   Pressable,
+  TouchableOpacity,
   Alert,
   Platform,
 } from "react-native";
@@ -35,31 +36,39 @@ function HistoryItem({
     minute: "2-digit",
   });
 
-  return (
-    <Pressable
-      onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        router.push({
-          pathname: "/results",
-          params: { analysisId: item.id },
-        });
-      }}
-      onLongPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        Alert.alert("Delete Analysis", "Remove this analysis from history?", [
+  const navigateToResults = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push({
+      pathname: "/results",
+      params: { analysisId: item.id },
+    });
+  }, [item.id]);
+
+  const confirmDelete = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (Platform.OS === "web") {
+      const confirmed = window.confirm("Remove this analysis from history?");
+      if (confirmed) {
+        onDelete(item.id);
+      }
+    } else {
+      Alert.alert(
+        "Delete Analysis",
+        "Remove this analysis from history?",
+        [
           { text: "Cancel", style: "cancel" },
           {
             text: "Delete",
             style: "destructive",
             onPress: () => onDelete(item.id),
           },
-        ]);
-      }}
-      style={({ pressed }) => [
-        styles.historyItem,
-        pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
-      ]}
-    >
+        ]
+      );
+    }
+  }, [item.id, onDelete]);
+
+  return (
+    <View style={styles.historyItem}>
       <View style={styles.historyItemTop}>
         <View style={styles.historyItemLeft}>
           <View
@@ -77,63 +86,54 @@ function HistoryItem({
             </Text>
           </View>
         </View>
-        <View style={styles.historyItemActions}>
-          <Pressable
-            onPress={(e) => {
-              e.stopPropagation?.();
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              Alert.alert(
-                "Delete Analysis",
-                "Remove this analysis from history?",
-                [
-                  { text: "Cancel", style: "cancel" },
-                  {
-                    text: "Delete",
-                    style: "destructive",
-                    onPress: () => onDelete(item.id),
-                  },
-                ]
-              );
-            }}
-            style={({ pressed }) => [
-              styles.deleteBtn,
-              pressed && { opacity: 0.7 },
-            ]}
-          >
-            <Ionicons name="trash-outline" size={16} color={Colors.error} />
-          </Pressable>
-          <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-        </View>
+        <TouchableOpacity
+          onPress={confirmDelete}
+          activeOpacity={0.6}
+          style={styles.deleteBtn}
+          testID="delete-analysis-btn"
+        >
+          <Ionicons name="trash-outline" size={16} color={Colors.error} />
+        </TouchableOpacity>
       </View>
 
-      <View style={styles.historyMetrics}>
-        <View style={styles.historyMetric}>
-          <Text style={styles.historyMetricLabel}>Net Income</Text>
-          <Text
-            style={[
-              styles.historyMetricValue,
-              { color: isPositive ? Colors.success : Colors.error },
-            ]}
-          >
-            {formatCurrency(item.ratios.netIncome)}
-          </Text>
+      <TouchableOpacity
+        onPress={navigateToResults}
+        activeOpacity={0.7}
+        style={styles.metricsTouch}
+      >
+        <View style={styles.historyMetrics}>
+          <View style={styles.historyMetric}>
+            <Text style={styles.historyMetricLabel}>Net Income</Text>
+            <Text
+              style={[
+                styles.historyMetricValue,
+                { color: isPositive ? Colors.success : Colors.error },
+              ]}
+            >
+              {formatCurrency(item.ratios.netIncome)}
+            </Text>
+          </View>
+          <View style={styles.historyDivider} />
+          <View style={styles.historyMetric}>
+            <Text style={styles.historyMetricLabel}>Gross Margin</Text>
+            <Text style={styles.historyMetricValue}>
+              {item.ratios.grossMargin.toFixed(1)}%
+            </Text>
+          </View>
+          <View style={styles.historyDivider} />
+          <View style={styles.historyMetric}>
+            <Text style={styles.historyMetricLabel}>ROE</Text>
+            <Text style={styles.historyMetricValue}>
+              {item.ratios.roe.toFixed(1)}%
+            </Text>
+          </View>
         </View>
-        <View style={styles.historyDivider} />
-        <View style={styles.historyMetric}>
-          <Text style={styles.historyMetricLabel}>Gross Margin</Text>
-          <Text style={styles.historyMetricValue}>
-            {item.ratios.grossMargin.toFixed(1)}%
-          </Text>
+        <View style={styles.viewResultsRow}>
+          <Text style={styles.viewResultsText}>View Results</Text>
+          <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
         </View>
-        <View style={styles.historyDivider} />
-        <View style={styles.historyMetric}>
-          <Text style={styles.historyMetricLabel}>ROE</Text>
-          <Text style={styles.historyMetricValue}>
-            {item.ratios.roe.toFixed(1)}%
-          </Text>
-        </View>
-      </View>
-    </Pressable>
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -159,25 +159,24 @@ export default function HistoryScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, []);
 
-  const handleClearAll = useCallback(() => {
-    Alert.alert(
-      "Clear History",
-      "This will permanently delete all saved analyses.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Clear All",
-          style: "destructive",
-          onPress: async () => {
-            await clearHistory();
-            setHistory([]);
-            Haptics.notificationAsync(
-              Haptics.NotificationFeedbackType.Success
-            );
-          },
-        },
-      ]
-    );
+  const handleClearAll = useCallback(async () => {
+    const doDelete = Platform.OS === "web"
+      ? window.confirm("This will permanently delete all saved analyses.")
+      : await new Promise<boolean>((resolve) =>
+          Alert.alert(
+            "Clear History",
+            "This will permanently delete all saved analyses.",
+            [
+              { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+              { text: "Clear All", style: "destructive", onPress: () => resolve(true) },
+            ]
+          )
+        );
+    if (doDelete) {
+      await clearHistory();
+      setHistory([]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
   }, []);
 
   return (
@@ -297,29 +296,41 @@ const styles = StyleSheet.create({
   },
   historyItemTop: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 14,
+    justifyContent: "space-between",
+    marginBottom: 12,
   },
   historyItemLeft: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     flex: 1,
-  },
-  historyItemActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginLeft: 8,
+    marginRight: 10,
   },
   deleteBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: Colors.surface,
     alignItems: "center",
     justifyContent: "center",
+  },
+  metricsTouch: {
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.06)",
+    paddingTop: 12,
+  },
+  viewResultsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    marginTop: 10,
+  },
+  viewResultsText: {
+    fontSize: 12,
+    fontFamily: "DMSans_500Medium",
+    color: Colors.primary,
   },
   historyDot: {
     width: 8,
