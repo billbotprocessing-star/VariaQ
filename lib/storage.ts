@@ -5,6 +5,45 @@ import type { AnalysisResult } from "./financial";
 
 const HISTORY_KEY = "varia_analysis_history";
 const DOCUMENTS_KEY = "varia_saved_documents";
+const PROFILE_KEY = "varia_user_profile";
+
+export interface UserProfile {
+  name: string;
+  avatarUri?: string;
+  createdAt: string;
+}
+
+export async function getProfile(): Promise<UserProfile> {
+  const data = await AsyncStorage.getItem(PROFILE_KEY);
+  if (!data) {
+    return {
+      name: "",
+      createdAt: new Date().toISOString(),
+    };
+  }
+  return JSON.parse(data);
+}
+
+export async function saveProfile(profile: UserProfile): Promise<void> {
+  await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+}
+
+export async function saveProfileAvatar(sourceUri: string): Promise<string> {
+  if (Platform.OS === "web") {
+    return sourceUri;
+  }
+
+  await ensureDocsDir();
+  const destPath = (DOCS_DIR || "") + "profile-avatar.jpg";
+  try {
+    const info = await FileSystem.getInfoAsync(destPath);
+    if (info.exists) {
+      await FileSystem.deleteAsync(destPath);
+    }
+  } catch {}
+  await FileSystem.copyAsync({ from: sourceUri, to: destPath });
+  return destPath;
+}
 
 export interface SavedDocument {
   id: string;
