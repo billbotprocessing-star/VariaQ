@@ -147,26 +147,44 @@ export default function InputScreen() {
         }
       );
 
-      const parsed = await response.json();
+      const rawParsed = await response.json();
+      console.log("[QuickFill] Raw API response:", JSON.stringify(rawParsed));
 
-      const docId = Crypto.randomUUID();
-      await saveDocument(
-        docId,
-        file.name || "Unnamed Document",
-        mediaType,
-        file.uri,
-        file.size || 0
-      );
-      setLastSavedDocId(docId);
+      const parsed =
+        rawParsed && typeof rawParsed === "object" && !Array.isArray(rawParsed)
+          ? rawParsed.financialData ?? rawParsed.data ?? rawParsed
+          : null;
+
+      const fieldAliases: Record<keyof FinancialData, string[]> = {
+        period: ["period", "Period", "fiscal_period", "fiscalPeriod"],
+        revenue: ["revenue", "Revenue", "total_revenue", "totalRevenue", "sales", "Sales"],
+        cogs: ["cogs", "COGS", "cost_of_goods_sold", "costOfGoodsSold", "cos", "COS"],
+        opex: ["opex", "OPEX", "operating_expenses", "operatingExpenses", "operating_expense", "operatingExpense"],
+        assets: ["assets", "Assets", "total_assets", "totalAssets"],
+        liabilities: ["liabilities", "Liabilities", "total_liabilities", "totalLiabilities"],
+        equity: ["equity", "Equity", "total_equity", "totalEquity", "shareholders_equity", "shareholdersEquity"],
+        cashOps: ["cashOps", "cash_ops", "cashFromOperations", "cash_from_operations", "operatingCashFlow", "operating_cash_flow"],
+        cashInv: ["cashInv", "cash_inv", "cashFromInvesting", "cash_from_investing", "investingCashFlow", "investing_cash_flow"],
+        cashFin: ["cashFin", "cash_fin", "cashFromFinancing", "cash_from_financing", "financingCashFlow", "financing_cash_flow"],
+      };
 
       if (parsed && typeof parsed === "object") {
+        let fieldsMatched = 0;
         setData((prev) => {
           const updated = { ...prev };
           (Object.keys(updated) as Array<keyof FinancialData>).forEach(
             (key) => {
-              if (parsed[key]) updated[key] = String(parsed[key]);
+              const aliases = fieldAliases[key] || [key];
+              for (const alias of aliases) {
+                if (parsed[alias] !== undefined && parsed[alias] !== null && parsed[alias] !== "") {
+                  updated[key] = String(parsed[alias]);
+                  fieldsMatched++;
+                  break;
+                }
+              }
             }
           );
+          console.log("[QuickFill] Fields matched:", fieldsMatched, "Updated data:", JSON.stringify(updated));
           return updated;
         });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -175,11 +193,26 @@ export default function InputScreen() {
           "Document saved and fields auto-filled. Verify the values below."
         );
       } else {
+        console.log("[QuickFill] Could not extract data from response");
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert(
           "Document Saved",
           "Document saved but could not extract data. Please enter values manually."
         );
+      }
+
+      try {
+        const docId = Crypto.randomUUID();
+        await saveDocument(
+          docId,
+          file.name || "Unnamed Document",
+          mediaType,
+          file.uri,
+          file.size || 0
+        );
+        setLastSavedDocId(docId);
+      } catch (docErr) {
+        console.log("[QuickFill] Document save failed (non-blocking):", docErr);
       }
     } catch {
       Alert.alert(
