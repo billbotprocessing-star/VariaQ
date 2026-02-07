@@ -271,7 +271,7 @@ export default function InputScreen() {
         <View style={styles.header}>
           <View style={styles.headerRow}>
             <View>
-              <Text style={styles.appTitle}>Varia</Text>
+              <Text style={styles.appTitle}>VariaQ</Text>
               <Text style={styles.appSubtitle}>AI Financial Analysis</Text>
             </View>
             <View style={styles.headerBtns}>
