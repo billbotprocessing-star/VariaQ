@@ -17,11 +17,13 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
+import * as Print from "expo-print";
 import Colors from "@/constants/colors";
 import {
   AnalysisResult,
   formatCurrency,
   generateReport,
+  generatePdfHtml,
 } from "@/lib/financial";
 import { getHistory } from "@/lib/storage";
 
@@ -155,33 +157,34 @@ export default function ResultsScreen() {
     })();
   }, [analysisId, analysisData]);
 
-  const handleExport = async () => {
+  const handleExportPdf = async () => {
     if (!analysis) return;
     setLoadingExport(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    const report = generateReport(
+    const html = generatePdfHtml(
       analysis.financialData,
       analysis.ratios,
-      analysis.insights,
-      analysis.summary
+      analysis.insights || "",
+      analysis.summary || ""
     );
 
     try {
       if (Platform.OS === "web") {
-        await Share.share({ message: report });
+        await Print.printAsync({ html });
       } else {
-        const fileUri =
-          FileSystem.cacheDirectory +
-          `varia-${analysis.financialData.period || "report"}.txt`;
-        await FileSystem.writeAsStringAsync(fileUri, report);
-        await Sharing.shareAsync(fileUri, {
-          mimeType: "text/plain",
-          dialogTitle: "Export Analysis Report",
+        const { uri } = await Print.printToFileAsync({
+          html,
+          base64: false,
+        });
+        await Sharing.shareAsync(uri, {
+          mimeType: "application/pdf",
+          dialogTitle: "Share Analysis Report",
+          UTI: "com.adobe.pdf",
         });
       }
     } catch {
-      Alert.alert("Export Error", "Could not export the report.");
+      Alert.alert("Export Error", "Could not generate the PDF.");
     } finally {
       setLoadingExport(false);
     }
@@ -236,7 +239,7 @@ export default function ResultsScreen() {
           </Pressable>
           <View style={styles.navActions}>
             <Pressable
-              onPress={handleExport}
+              onPress={handleExportPdf}
               disabled={loadingExport}
               style={({ pressed }) => [
                 styles.navBtn,
