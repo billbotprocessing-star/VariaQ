@@ -26,7 +26,7 @@ import {
   calculateRatios,
   cleanFormatting,
 } from "@/lib/financial";
-import { saveAnalysis } from "@/lib/storage";
+import { saveAnalysis, saveDocument, linkDocumentToAnalysis } from "@/lib/storage";
 
 function SectionHeader({
   icon,
@@ -85,6 +85,7 @@ export default function InputScreen() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [includeSummary, setIncludeSummary] = useState(false);
+  const [lastSavedDocId, setLastSavedDocId] = useState<string | null>(null);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
@@ -152,6 +153,16 @@ export default function InputScreen() {
 
       const parsed = await response.json();
 
+      const docId = Crypto.randomUUID();
+      await saveDocument(
+        docId,
+        file.name || "Unnamed Document",
+        mediaType,
+        file.uri,
+        file.size || 0
+      );
+      setLastSavedDocId(docId);
+
       if (parsed && typeof parsed === "object") {
         setData((prev) => {
           const updated = { ...prev };
@@ -164,8 +175,14 @@ export default function InputScreen() {
         });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert(
-          "Data Extracted",
-          "Fields have been auto-filled. Please verify the values below."
+          "Data Extracted & Saved",
+          "Document saved and fields auto-filled. Verify the values below."
+        );
+      } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert(
+          "Document Saved",
+          "Document saved but could not extract data. Please enter values manually."
         );
       }
     } catch {
@@ -222,6 +239,11 @@ export default function InputScreen() {
       };
 
       await saveAnalysis(analysis);
+
+      if (lastSavedDocId) {
+        await linkDocumentToAnalysis(lastSavedDocId, analysisId);
+      }
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       router.push({
@@ -236,7 +258,7 @@ export default function InputScreen() {
     } finally {
       setLoading(false);
     }
-  }, [data, includeSummary]);
+  }, [data, includeSummary, lastSavedDocId]);
 
   return (
     <View style={styles.container}>
@@ -256,18 +278,32 @@ export default function InputScreen() {
               <Text style={styles.appTitle}>Varia</Text>
               <Text style={styles.appSubtitle}>AI Financial Analysis</Text>
             </View>
-            <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push("/history");
-              }}
-              style={({ pressed }) => [
-                styles.historyBtn,
-                pressed && { opacity: 0.7 },
-              ]}
-            >
-              <Ionicons name="time-outline" size={22} color={Colors.textSecondary} />
-            </Pressable>
+            <View style={styles.headerBtns}>
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push("/documents");
+                }}
+                style={({ pressed }) => [
+                  styles.historyBtn,
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
+                <Ionicons name="folder-outline" size={21} color={Colors.textSecondary} />
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push("/history");
+                }}
+                style={({ pressed }) => [
+                  styles.historyBtn,
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
+                <Ionicons name="time-outline" size={22} color={Colors.textSecondary} />
+              </Pressable>
+            </View>
           </View>
         </View>
 
@@ -481,6 +517,11 @@ const styles = StyleSheet.create({
     fontFamily: "DMSans_400Regular",
     color: Colors.textSecondary,
     marginTop: 2,
+  },
+  headerBtns: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   historyBtn: {
     width: 44,

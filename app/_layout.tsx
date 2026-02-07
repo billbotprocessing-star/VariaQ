@@ -29,6 +29,7 @@ function RootLayoutNav() {
       <Stack.Screen name="index" />
       <Stack.Screen name="results" />
       <Stack.Screen name="history" />
+      <Stack.Screen name="documents" />
     </Stack>
   );
 }
