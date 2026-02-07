@@ -100,11 +100,7 @@ export default function InputScreen() {
   const handleFileUpload = useCallback(async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          "application/pdf",
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          "application/vnd.ms-excel",
-        ],
+        type: ["application/pdf"],
       });
 
       if (result.canceled) return;
@@ -343,7 +339,7 @@ export default function InputScreen() {
                 {uploading ? "Processing..." : "Quick Fill from Document"}
               </Text>
               <Text style={styles.uploadSubtitle}>
-                Upload Excel or PDF to auto-fill fields
+                Upload a PDF to auto-fill fields
               </Text>
             </View>
             <Feather name="chevron-right" size={20} color={Colors.textMuted} />
