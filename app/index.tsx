@@ -257,8 +257,16 @@ export default function InputScreen() {
 
       const result = await response.json();
 
+      if (!result || (!result.insights && !result.summary)) {
+        Alert.alert(
+          "Analysis Failed",
+          "The AI service did not return any insights. Please try again."
+        );
+        return;
+      }
+
       const analysisId = Crypto.randomUUID();
-      const analysis = {
+      const analysis: AnalysisResult = {
         id: analysisId,
         date: new Date().toISOString(),
         financialData: data,
@@ -267,17 +275,20 @@ export default function InputScreen() {
         summary: cleanFormatting(result.summary),
       };
 
-      await saveAnalysis(analysis);
-
-      if (lastSavedDocId) {
-        await linkDocumentToAnalysis(lastSavedDocId, analysisId);
+      try {
+        await saveAnalysis(analysis);
+        if (lastSavedDocId) {
+          await linkDocumentToAnalysis(lastSavedDocId, analysisId);
+        }
+      } catch (saveErr) {
+        console.log("[Analyze] Save to server failed (non-blocking):", saveErr);
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       router.push({
         pathname: "/results",
-        params: { analysisId },
+        params: { analysisId, analysisData: JSON.stringify(analysis) },
       });
     } catch {
       Alert.alert(

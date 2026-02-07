@@ -127,7 +127,7 @@ function CashFlowBar({
 
 export default function ResultsScreen() {
   const insets = useSafeAreaInsets();
-  const { analysisId } = useLocalSearchParams<{ analysisId: string }>();
+  const { analysisId, analysisData } = useLocalSearchParams<{ analysisId: string; analysisData?: string }>();
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [loadingExport, setLoadingExport] = useState(false);
 
@@ -138,9 +138,17 @@ export default function ResultsScreen() {
     (async () => {
       const history = await getHistory();
       const found = history.find((a) => a.id === analysisId);
-      if (found) setAnalysis(found);
+      if (found) {
+        setAnalysis(found);
+      } else if (analysisData) {
+        try {
+          setAnalysis(JSON.parse(analysisData));
+        } catch {
+          console.log("[Results] Failed to parse analysisData param");
+        }
+      }
     })();
-  }, [analysisId]);
+  }, [analysisId, analysisData]);
 
   const handleExport = async () => {
     if (!analysis) return;
