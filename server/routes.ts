@@ -1,12 +1,15 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "node:http";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
+import crypto from "crypto";
 import { pool } from "./db";
 import {
   createUser,
   getUserByUsername,
   getUserById,
+  getUserByToken,
+  setAuthToken,
   verifyPassword,
   updateUserProfile,
   saveAnalysis,
@@ -26,8 +29,32 @@ declare module "express-session" {
   }
 }
 
-function requireAuth(req: Request, res: Response, next: Function) {
-  if (!req.session.userId) {
+declare global {
+  namespace Express {
+    interface Request {
+      tokenUserId?: string;
+    }
+  }
+}
+
+async function resolveTokenAuth(req: Request, _res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.slice(7);
+    const user = await getUserByToken(token);
+    if (user) {
+      req.tokenUserId = user.id;
+    }
+  }
+  next();
+}
+
+function getUserId(req: Request): string | undefined {
+  return req.tokenUserId || req.session.userId;
+}
+
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (!getUserId(req)) {
     return res.status(401).json({ message: "Not authenticated" });
   }
   next();
@@ -54,6 +81,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     })
   );
 
+  app.use(resolveTokenAuth);
+
   app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {
       const { username, password } = req.body;
@@ -75,12 +104,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const user = await createUser(username, password);
+      const token = crypto.randomBytes(32).toString("hex");
+      await setAuthToken(user.id, token);
       req.session.userId = user.id;
       return res.json({
         id: user.id,
         username: user.username,
         displayName: user.displayName,
         avatarUrl: user.avatarUrl,
+        token,
       });
     } catch (err) {
       console.error("Register error:", err);
@@ -111,12 +143,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .json({ message: "Invalid username or password" });
       }
 
+      const token = crypto.randomBytes(32).toString("hex");
+      await setAuthToken(user.id, token);
       req.session.userId = user.id;
       return res.json({
         id: user.id,
         username: user.username,
         displayName: user.displayName,
         avatarUrl: user.avatarUrl,
+        token,
       });
     } catch (err) {
       console.error("Login error:", err);
@@ -124,17 +159,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/auth/logout", (req: Request, res: Response) => {
+  app.post("/api/auth/logout", async (req: Request, res: Response) => {
+    const uid = getUserId(req);
+    if (uid) {
+      await setAuthToken(uid, null);
+    }
     req.session.destroy(() => {
       res.json({ ok: true });
     });
   });
 
   app.get("/api/user", async (req: Request, res: Response) => {
-    if (!req.session.userId) {
+    const uid = getUserId(req);
+    if (!uid) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-    const user = await getUserById(req.session.userId);
+    const user = await getUserById(uid);
     if (!user) {
       return res.status(401).json({ message: "User not found" });
     }
@@ -152,7 +192,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req: Request, res: Response) => {
       const { displayName, avatarUrl } = req.body;
       const user = await updateUserProfile(
-        req.session.userId!,
+        getUserId(req)!,
         displayName ?? "",
         avatarUrl
       );
@@ -169,7 +209,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/analyses",
     requireAuth,
     async (req: Request, res: Response) => {
-      const data = await getAnalyses(req.session.userId!);
+      const data = await getAnalyses(getUserId(req)!);
       return res.json(data);
     }
   );
@@ -179,7 +219,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireAuth,
     async (req: Request, res: Response) => {
       const { id, data } = req.body;
-      await saveAnalysis(req.session.userId!, id, data);
+      await saveAnalysis(getUserId(req)!, id, data);
       return res.json({ ok: true });
     }
   );
@@ -188,7 +228,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/analyses/:id",
     requireAuth,
     async (req: Request, res: Response) => {
-      await deleteAnalysis(req.session.userId!, req.params.id as string);
+      await deleteAnalysis(getUserId(req)!, req.params.id as string);
       return res.json({ ok: true });
     }
   );
@@ -197,7 +237,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/analyses",
     requireAuth,
     async (req: Request, res: Response) => {
-      await clearAnalyses(req.session.userId!);
+      await clearAnalyses(getUserId(req)!);
       return res.json({ ok: true });
     }
   );
@@ -206,7 +246,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/documents",
     requireAuth,
     async (req: Request, res: Response) => {
-      const docs = await getDocuments(req.session.userId!);
+      const docs = await getDocuments(getUserId(req)!);
       return res.json(docs);
     }
   );
@@ -217,7 +257,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req: Request, res: Response) => {
       const { id, name, mimeType, size, linkedAnalysisId } = req.body;
       await saveDocument(
-        req.session.userId!,
+        getUserId(req)!,
         id,
         name,
         mimeType,
@@ -232,7 +272,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/documents/:id",
     requireAuth,
     async (req: Request, res: Response) => {
-      await deleteDocument(req.session.userId!, req.params.id as string);
+      await deleteDocument(getUserId(req)!, req.params.id as string);
       return res.json({ ok: true });
     }
   );
@@ -241,7 +281,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/documents",
     requireAuth,
     async (req: Request, res: Response) => {
-      await clearDocuments(req.session.userId!);
+      await clearDocuments(getUserId(req)!);
       return res.json({ ok: true });
     }
   );
@@ -252,7 +292,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req: Request, res: Response) => {
       const { analysisId } = req.body;
       await linkDocumentToAnalysis(
-        req.session.userId!,
+        getUserId(req)!,
         req.params.id as string,
         analysisId
       );

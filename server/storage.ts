@@ -36,6 +36,24 @@ export async function getUserById(id: string): Promise<User | undefined> {
   return user;
 }
 
+export async function getUserByToken(token: string): Promise<User | undefined> {
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.authToken, token));
+  return user;
+}
+
+export async function setAuthToken(
+  userId: string,
+  token: string | null
+): Promise<void> {
+  await db
+    .update(users)
+    .set({ authToken: token })
+    .where(eq(users.id, userId));
+}
+
 export async function verifyPassword(
   user: User,
   password: string
