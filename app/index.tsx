@@ -303,6 +303,18 @@ export default function InputScreen() {
               >
                 <Ionicons name="time-outline" size={22} color={Colors.textSecondary} />
               </Pressable>
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push("/profile");
+                }}
+                style={({ pressed }) => [
+                  styles.historyBtn,
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
+                <Ionicons name="person-circle-outline" size={23} color={Colors.textSecondary} />
+              </Pressable>
             </View>
           </View>
         </View>
