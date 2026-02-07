@@ -136,8 +136,13 @@ export default function ResultsScreen() {
 
   useEffect(() => {
     (async () => {
-      const history = await getHistory();
-      const found = history.find((a) => a.id === analysisId);
+      let found: AnalysisResult | undefined;
+      try {
+        const history = await getHistory();
+        found = history.find((a) => a.id === analysisId);
+      } catch (err) {
+        console.log("[Results] Could not fetch history from server:", err);
+      }
       if (found) {
         setAnalysis(found);
       } else if (analysisData) {

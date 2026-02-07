@@ -22,6 +22,7 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import Colors from "@/constants/colors";
 import {
   FinancialData,
+  AnalysisResult,
   createEmptyFinancialData,
   calculateRatios,
   cleanFormatting,

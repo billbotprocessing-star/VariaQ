@@ -14,7 +14,7 @@ Preferred communication style: Simple, everyday language.
 
 ### Frontend (Expo/React Native)
 - **Framework**: Expo SDK 54 with expo-router for file-based routing
-- **Routing**: File-based routing via `app/` directory with four main screens: `index` (input), `results` (analysis display), `history` (past analyses), `documents` (saved files)
+- **Routing**: File-based routing via `app/` directory with screens: `login` (auth), `index` (input), `results` (analysis display), `history` (past analyses), `documents` (saved files), `profile` (user profile)
 - **State Management**: TanStack React Query for server state; local state with React hooks
 - **Local Storage**: AsyncStorage for persisting analysis history and document metadata; expo-file-system for document file storage
 - **Styling**: React Native StyleSheet with a dark theme (navy/blue gradient aesthetic defined in `constants/colors.ts`)
@@ -25,22 +25,23 @@ Preferred communication style: Simple, everyday language.
 ### Backend (Express)
 - **Runtime**: Express 5 server in `server/` directory
 - **Entry point**: `server/index.ts` — sets up CORS (allowing Replit domains and localhost), JSON parsing, and serves static builds in production
-- **Routes**: Defined in `server/routes.ts` — currently minimal, prefixed with `/api`
-- **Storage Layer**: `server/storage.ts` implements an `IStorage` interface with an in-memory implementation (`MemStorage`) for user CRUD. This is a placeholder ready to be swapped for database-backed storage.
+- **Routes**: Defined in `server/routes.ts` — auth (register/login/logout), analyses CRUD, documents CRUD, user profile, all prefixed with `/api`
+- **Authentication**: Token-based auth — tokens generated on login/register, stored in `auth_token` column, validated via `Authorization: Bearer <token>` header. `resolveUserId` function resolves user from session or token.
+- **Storage Layer**: `server/storage.ts` implements an `IStorage` interface with PostgreSQL-backed storage for users, analyses, and documents.
 - **Build**: Server is bundled with esbuild for production (`server_dist/`)
 
 ### Shared Code
 - **Location**: `shared/schema.ts`
 - **ORM**: Drizzle ORM with PostgreSQL dialect
 - **Schema Validation**: drizzle-zod for generating Zod schemas from Drizzle table definitions
-- **Current Schema**: A `users` table with `id` (UUID), `username`, and `password` fields. This is a starter schema — the app's financial analysis features currently use client-side storage (AsyncStorage), not the database.
+- **Current Schema**: `users` table (id UUID, username, password, auth_token, display_name, avatar_url), `analyses` table (id, user_id, data JSONB, date), `documents` table (id, user_id, name, mime_type, size, saved_at, linked_analysis_id)
 
 ### Database
 - **ORM**: Drizzle ORM configured for PostgreSQL
 - **Config**: `drizzle.config.ts` reads `DATABASE_URL` environment variable
 - **Migrations**: Output to `./migrations` directory
 - **Push command**: `npm run db:push` to sync schema to database
-- **Note**: The current app functionality (financial analysis, history, documents) is stored client-side. The PostgreSQL database with the users table exists but isn't actively used by the main features yet.
+- **Note**: All data (users, analyses, documents) is persisted in PostgreSQL. The `lib/storage.ts` client module talks to the backend API for data persistence.
 
 ### Development Workflow
 - Two parallel processes in development: Expo dev server (`expo:dev`) and Express server (`server:dev` via tsx)

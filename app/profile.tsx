@@ -40,14 +40,18 @@ export default function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       (async () => {
-        const [p, h, d] = await Promise.all([
-          getProfile(),
-          getHistory(),
-          getDocuments(),
-        ]);
-        setProfile(p);
-        setHistoryCount(h.length);
-        setDocsCount(d.length);
+        try {
+          const [p, h, d] = await Promise.all([
+            getProfile().catch(() => ({ name: user?.username || "", createdAt: new Date().toISOString() })),
+            getHistory().catch(() => []),
+            getDocuments().catch(() => []),
+          ]);
+          setProfile(p);
+          setHistoryCount(h.length);
+          setDocsCount(d.length);
+        } catch {
+          setProfile({ name: user?.username || "", createdAt: new Date().toISOString() });
+        }
       })();
     }, [])
   );
