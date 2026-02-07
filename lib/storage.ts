@@ -99,7 +99,7 @@ export async function getProfile(): Promise<UserProfile> {
   }
   const user = await res.json();
   return {
-    name: user.displayName || "",
+    name: user.displayName || user.username || "",
     avatarUri: user.avatarUrl || undefined,
     createdAt: user.createdAt || new Date().toISOString(),
   };
