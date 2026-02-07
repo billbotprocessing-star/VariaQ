@@ -241,39 +241,53 @@ export default function InputScreen() {
     const ratios = calculateRatios(data);
 
     try {
-      const response = await fetch(
+      const analyzePayload = {
+        period: data.period,
+        financialData: data,
+        ratios,
+        includeSummary,
+      };
+
+      const parseAnalysisResponse = (raw: unknown) => {
+        const obj = Array.isArray(raw) ? raw[0] : raw;
+        if (!obj || typeof obj !== "object") return null;
+        const r = obj as Record<string, unknown>;
+        const ins = r.insights || r.analysis || r.output || r.response || "";
+        const sum = r.summary || r.executiveSummary || r.executive_summary || "";
+        if (!ins && !sum) return null;
+        return { insights: String(ins), summary: String(sum) };
+      };
+
+      let response = await fetch(
         "https://billbotprocessing.app.n8n.cloud/webhook/varia-analysis",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            period: data.period,
-            financialData: data,
-            ratios,
-            includeSummary: true,
-          }),
+          body: JSON.stringify(analyzePayload),
         }
       );
 
-      const rawResult = await response.json();
+      let rawResult = await response.json();
       console.log("[Analyze] Raw API response:", JSON.stringify(rawResult));
+      let parsed = parseAnalysisResponse(rawResult);
 
-      const result = Array.isArray(rawResult) ? rawResult[0] : rawResult;
-
-      if (!result || typeof result !== "object") {
-        Alert.alert(
-          "Analysis Failed",
-          "The AI service did not return any insights. Please try again."
+      if (!parsed && !includeSummary) {
+        console.log("[Analyze] Retrying with includeSummary=true as fallback");
+        response = await fetch(
+          "https://billbotprocessing.app.n8n.cloud/webhook/varia-analysis",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...analyzePayload, includeSummary: true }),
+          }
         );
-        return;
+        rawResult = await response.json();
+        console.log("[Analyze] Fallback API response:", JSON.stringify(rawResult));
+        parsed = parseAnalysisResponse(rawResult);
+        if (parsed) parsed.summary = "";
       }
 
-      const insights =
-        result.insights || result.analysis || result.output || result.response || "";
-      const summary =
-        result.summary || result.executiveSummary || result.executive_summary || "";
-
-      if (!insights && !summary) {
+      if (!parsed) {
         Alert.alert(
           "Analysis Failed",
           "The AI service did not return any insights. Please try again."
@@ -287,8 +301,8 @@ export default function InputScreen() {
         date: new Date().toISOString(),
         financialData: data,
         ratios,
-        insights: cleanFormatting(insights),
-        summary: includeSummary ? cleanFormatting(summary) : "",
+        insights: cleanFormatting(parsed.insights),
+        summary: cleanFormatting(parsed.summary),
       };
 
       try {
