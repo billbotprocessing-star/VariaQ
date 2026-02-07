@@ -64,24 +64,29 @@ function DocumentItem({
 
   return (
     <Pressable
-      onLongPress={() => {
+      onLongPress={async () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        Alert.alert(item.name, "What would you like to do?", [
-          { text: "Cancel", style: "cancel" },
-          ...(item.localUri
-            ? [
-                {
-                  text: "Share",
-                  onPress: () => onShare(item),
-                },
-              ]
-            : []),
-          {
-            text: "Delete",
-            style: "destructive" as const,
-            onPress: () => onDelete(item.id),
-          },
-        ]);
+        if (Platform.OS === "web") {
+          const confirmed = window.confirm(`Delete "${item.name}"?`);
+          if (confirmed) onDelete(item.id);
+        } else {
+          Alert.alert(item.name, "What would you like to do?", [
+            { text: "Cancel", style: "cancel" },
+            ...(item.localUri
+              ? [
+                  {
+                    text: "Share",
+                    onPress: () => onShare(item),
+                  },
+                ]
+              : []),
+            {
+              text: "Delete",
+              style: "destructive" as const,
+              onPress: () => onDelete(item.id),
+            },
+          ]);
+        }
       }}
       style={({ pressed }) => [
         styles.docItem,
@@ -143,20 +148,22 @@ function DocumentItem({
           </Pressable>
         )}
         <Pressable
-          onPress={() => {
+          onPress={async () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            Alert.alert(
-              "Delete Document",
-              `Remove "${item.name}" from saved documents?`,
-              [
-                { text: "Cancel", style: "cancel" },
-                {
-                  text: "Delete",
-                  style: "destructive",
-                  onPress: () => onDelete(item.id),
-                },
-              ]
-            );
+            const confirmed =
+              Platform.OS === "web"
+                ? window.confirm(`Remove "${item.name}" from saved documents?`)
+                : await new Promise<boolean>((resolve) =>
+                    Alert.alert(
+                      "Delete Document",
+                      `Remove "${item.name}" from saved documents?`,
+                      [
+                        { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+                        { text: "Delete", style: "destructive", onPress: () => resolve(true) },
+                      ]
+                    )
+                  );
+            if (confirmed) onDelete(item.id);
           }}
           style={({ pressed }) => [
             styles.docActionBtn,
@@ -204,26 +211,26 @@ export default function DocumentsScreen() {
     }
   }, []);
 
-  const handleClearAll = useCallback(() => {
+  const handleClearAll = useCallback(async () => {
     if (documents.length === 0) return;
-    Alert.alert(
-      "Clear All Documents",
-      "This will permanently delete all saved documents from this device.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Clear All",
-          style: "destructive",
-          onPress: async () => {
-            await clearDocuments();
-            setDocuments([]);
-            Haptics.notificationAsync(
-              Haptics.NotificationFeedbackType.Success
-            );
-          },
-        },
-      ]
-    );
+    const confirmed =
+      Platform.OS === "web"
+        ? window.confirm("This will permanently delete all saved documents from this device.")
+        : await new Promise<boolean>((resolve) =>
+            Alert.alert(
+              "Clear All Documents",
+              "This will permanently delete all saved documents from this device.",
+              [
+                { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+                { text: "Clear All", style: "destructive", onPress: () => resolve(true) },
+              ]
+            )
+          );
+    if (confirmed) {
+      await clearDocuments();
+      setDocuments([]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
   }, [documents.length]);
 
   return (
