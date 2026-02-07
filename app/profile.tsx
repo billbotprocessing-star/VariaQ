@@ -1,17 +1,16 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback } from "react";
 import {
   StyleSheet,
   Text,
   View,
   Pressable,
-  TextInput,
   Image,
   Platform,
   ActivityIndicator,
   Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
@@ -29,17 +28,14 @@ import { useAuth } from "@/lib/auth";
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [editingName, setEditingName] = useState(false);
-  const [nameInput, setNameInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [historyCount, setHistoryCount] = useState(0);
   const [docsCount, setDocsCount] = useState(0);
-  const nameRef = useRef<TextInput>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -50,7 +46,6 @@ export default function ProfileScreen() {
           getDocuments(),
         ]);
         setProfile(p);
-        setNameInput(p.name);
         setHistoryCount(h.length);
         setDocsCount(d.length);
       })();
@@ -78,21 +73,6 @@ export default function ProfileScreen() {
     }
   }, [profile]);
 
-  const handleSaveName = useCallback(async () => {
-    if (!profile) return;
-    const trimmed = nameInput.trim();
-    const updated = { ...profile, name: trimmed };
-    await saveProfile(updated);
-    setProfile(updated);
-    setEditingName(false);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [profile, nameInput]);
-
-  const startEditName = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setEditingName(true);
-    setTimeout(() => nameRef.current?.focus(), 100);
-  }, []);
 
   if (!profile) {
     return (
@@ -107,13 +87,9 @@ export default function ProfileScreen() {
     year: "numeric",
   });
 
-  const initials = profile.name
-    ? profile.name
-        .split(" ")
-        .map((w) => w[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2)
+  const username = user?.username || "";
+  const initials = username
+    ? username.slice(0, 2).toUpperCase()
     : "";
 
   return (
@@ -174,44 +150,7 @@ export default function ProfileScreen() {
             </View>
           </Pressable>
 
-          {editingName ? (
-            <View style={styles.nameEditRow}>
-              <TextInput
-                ref={nameRef}
-                value={nameInput}
-                onChangeText={setNameInput}
-                style={styles.nameInput}
-                placeholder="Your name"
-                placeholderTextColor={Colors.textMuted}
-                onSubmitEditing={handleSaveName}
-                returnKeyType="done"
-                autoFocus
-                maxLength={40}
-              />
-              <Pressable
-                onPress={handleSaveName}
-                style={({ pressed }) => [styles.saveNameBtn, pressed && { opacity: 0.7 }]}
-              >
-                <Ionicons name="checkmark" size={22} color={Colors.success} />
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  setEditingName(false);
-                  setNameInput(profile.name);
-                }}
-                style={({ pressed }) => [styles.saveNameBtn, pressed && { opacity: 0.7 }]}
-              >
-                <Ionicons name="close" size={22} color={Colors.textMuted} />
-              </Pressable>
-            </View>
-          ) : (
-            <Pressable onPress={startEditName} style={styles.nameRow}>
-              <Text style={styles.userName}>
-                {profile.name || "Tap to set name"}
-              </Text>
-              <Feather name="edit-2" size={16} color={Colors.textMuted} />
-            </Pressable>
-          )}
+          <Text style={styles.userName}>{username}</Text>
 
           <Text style={styles.memberSince}>Member since {memberSince}</Text>
         </View>
@@ -396,39 +335,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  nameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
   userName: {
     fontSize: 22,
     fontFamily: "DMSans_700Bold",
     color: Colors.text,
-  },
-  nameEditRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  nameInput: {
-    fontSize: 20,
-    fontFamily: "DMSans_600SemiBold",
-    color: Colors.text,
-    borderBottomWidth: 2,
-    borderBottomColor: Colors.primary,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    minWidth: 160,
-    textAlign: "center",
-  },
-  saveNameBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.surface,
+    marginTop: 12,
   },
   memberSince: {
     fontSize: 13,
