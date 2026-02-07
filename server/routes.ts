@@ -37,27 +37,35 @@ declare global {
   }
 }
 
-async function resolveTokenAuth(req: Request, _res: Response, next: NextFunction) {
+async function resolveUserId(req: Request): Promise<string | undefined> {
+  if (req.session.userId) {
+    return req.session.userId;
+  }
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith("Bearer ")) {
     const token = authHeader.slice(7);
-    const user = await getUserByToken(token);
-    if (user) {
-      req.tokenUserId = user.id;
-    }
+    try {
+      const user = await getUserByToken(token);
+      if (user) return user.id;
+    } catch {}
   }
-  next();
-}
-
-function getUserId(req: Request): string | undefined {
-  return req.tokenUserId || req.session.userId;
+  return undefined;
 }
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
-  if (!getUserId(req)) {
-    return res.status(401).json({ message: "Not authenticated" });
-  }
-  next();
+  resolveUserId(req).then((uid) => {
+    if (!uid) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    (req as any)._resolvedUserId = uid;
+    next();
+  }).catch(() => {
+    res.status(401).json({ message: "Not authenticated" });
+  });
+}
+
+function getUserId(req: Request): string {
+  return (req as any)._resolvedUserId || req.session.userId;
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -80,8 +88,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       },
     })
   );
-
-  app.use(resolveTokenAuth);
 
   app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {
@@ -170,7 +176,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/user", async (req: Request, res: Response) => {
-    const uid = getUserId(req);
+    const uid = await resolveUserId(req);
     if (!uid) {
       return res.status(401).json({ message: "Not authenticated" });
     }
