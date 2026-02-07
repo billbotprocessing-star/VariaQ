@@ -250,13 +250,15 @@ export default function InputScreen() {
             period: data.period,
             financialData: data,
             ratios,
-            includeSummary,
+            includeSummary: true,
           }),
         }
       );
 
-      const result = await response.json();
-      console.log("[Analyze] Raw API response:", JSON.stringify(result));
+      const rawResult = await response.json();
+      console.log("[Analyze] Raw API response:", JSON.stringify(rawResult));
+
+      const result = Array.isArray(rawResult) ? rawResult[0] : rawResult;
 
       if (!result || typeof result !== "object") {
         Alert.alert(
@@ -286,7 +288,7 @@ export default function InputScreen() {
         financialData: data,
         ratios,
         insights: cleanFormatting(insights),
-        summary: cleanFormatting(summary),
+        summary: includeSummary ? cleanFormatting(summary) : "",
       };
 
       try {
