@@ -8,6 +8,7 @@ import {
   Image,
   Platform,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -24,9 +25,11 @@ import {
   getDocuments,
   UserProfile,
 } from "@/lib/storage";
+import { useAuth } from "@/lib/auth";
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
+  const { logout } = useAuth();
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
 
@@ -283,6 +286,31 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
           </Pressable>
         </View>
+
+        <Pressable
+          onPress={async () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            const confirmed =
+              Platform.OS === "web"
+                ? window.confirm("Are you sure you want to sign out?")
+                : await new Promise<boolean>((resolve) =>
+                    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+                      { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+                      { text: "Sign Out", style: "destructive", onPress: () => resolve(true) },
+                    ])
+                  );
+            if (confirmed) {
+              await logout();
+            }
+          }}
+          style={({ pressed }) => [
+            styles.logoutBtn,
+            pressed && { opacity: 0.85 },
+          ]}
+        >
+          <Ionicons name="log-out-outline" size={20} color={Colors.error} />
+          <Text style={styles.logoutText}>Sign Out</Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -484,5 +512,22 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: "rgba(255,255,255,0.06)",
     marginLeft: 70,
+  },
+  logoutBtn: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    gap: 8,
+    paddingVertical: 16,
+    marginTop: 24,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.25)",
+    backgroundColor: "rgba(239,68,68,0.08)",
+  },
+  logoutText: {
+    fontSize: 16,
+    fontFamily: "DMSans_600SemiBold",
+    color: Colors.error,
   },
 });

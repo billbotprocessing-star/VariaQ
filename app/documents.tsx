@@ -12,7 +12,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
-import * as Sharing from "expo-sharing";
 import Colors from "@/constants/colors";
 import {
   SavedDocument,
@@ -40,11 +39,9 @@ function formatFileSize(bytes: number): string {
 function DocumentItem({
   item,
   onDelete,
-  onShare,
 }: {
   item: SavedDocument;
   onDelete: (id: string) => void;
-  onShare: (doc: SavedDocument) => void;
 }) {
   const { name: iconName, color: iconColor } = getFileIcon(item.mimeType);
   const date = new Date(item.savedAt);
@@ -53,14 +50,12 @@ function DocumentItem({
     day: "numeric",
     year: "numeric",
   });
-  const formattedTime = date.toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 
   const isPdf = item.mimeType.includes("pdf");
   const isExcel =
     item.mimeType.includes("sheet") || item.mimeType.includes("excel");
+
+  const sizeNum = typeof item.size === "string" ? parseInt(item.size, 10) : item.size;
 
   return (
     <Pressable
@@ -72,14 +67,6 @@ function DocumentItem({
         } else {
           Alert.alert(item.name, "What would you like to do?", [
             { text: "Cancel", style: "cancel" },
-            ...(item.localUri
-              ? [
-                  {
-                    text: "Share",
-                    onPress: () => onShare(item),
-                  },
-                ]
-              : []),
             {
               text: "Delete",
               style: "destructive" as const,
@@ -107,10 +94,8 @@ function DocumentItem({
               {isPdf ? "PDF" : isExcel ? "Excel" : "File"}
             </Text>
           </View>
-          <Text style={styles.docSize}>{formatFileSize(item.size)}</Text>
-          <Text style={styles.docDate}>
-            {formattedDate}
-          </Text>
+          <Text style={styles.docSize}>{formatFileSize(sizeNum || 0)}</Text>
+          <Text style={styles.docDate}>{formattedDate}</Text>
         </View>
         {item.linkedAnalysisId && (
           <Pressable
@@ -118,7 +103,7 @@ function DocumentItem({
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.push({
                 pathname: "/results",
-                params: { analysisId: item.linkedAnalysisId },
+                params: { analysisId: item.linkedAnalysisId! },
               });
             }}
             style={({ pressed }) => [
@@ -133,20 +118,6 @@ function DocumentItem({
       </View>
 
       <View style={styles.docActions}>
-        {item.localUri && (
-          <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              onShare(item);
-            }}
-            style={({ pressed }) => [
-              styles.docActionBtn,
-              pressed && { opacity: 0.7 },
-            ]}
-          >
-            <Feather name="share-2" size={16} color={Colors.textSecondary} />
-          </Pressable>
-        )}
         <Pressable
           onPress={async () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -199,27 +170,15 @@ export default function DocumentsScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, []);
 
-  const handleShare = useCallback(async (doc: SavedDocument) => {
-    if (!doc.localUri || Platform.OS === "web") return;
-    try {
-      await Sharing.shareAsync(doc.localUri, {
-        mimeType: doc.mimeType,
-        dialogTitle: `Share ${doc.name}`,
-      });
-    } catch {
-      Alert.alert("Share Error", "Could not share this document.");
-    }
-  }, []);
-
   const handleClearAll = useCallback(async () => {
     if (documents.length === 0) return;
     const confirmed =
       Platform.OS === "web"
-        ? window.confirm("This will permanently delete all saved documents from this device.")
+        ? window.confirm("This will permanently delete all saved documents.")
         : await new Promise<boolean>((resolve) =>
             Alert.alert(
               "Clear All Documents",
-              "This will permanently delete all saved documents from this device.",
+              "This will permanently delete all saved documents.",
               [
                 { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
                 { text: "Clear All", style: "destructive", onPress: () => resolve(true) },
@@ -283,7 +242,6 @@ export default function DocumentsScreen() {
           <DocumentItem
             item={item}
             onDelete={handleDelete}
-            onShare={handleShare}
           />
         )}
         contentContainerStyle={{
