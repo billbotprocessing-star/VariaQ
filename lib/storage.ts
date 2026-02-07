@@ -1,4 +1,4 @@
-import { apiRequest, getApiUrl } from "./query-client";
+import { apiRequest, getApiUrl, getAuthToken } from "./query-client";
 import { fetch } from "expo/fetch";
 import type { AnalysisResult } from "./financial";
 
@@ -17,6 +17,11 @@ export interface UserProfile {
   createdAt: string;
 }
 
+function authHeaders(): Record<string, string> {
+  const token = getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export async function saveAnalysis(analysis: AnalysisResult): Promise<void> {
   await apiRequest("POST", "/api/analyses", {
     id: analysis.id,
@@ -27,7 +32,10 @@ export async function saveAnalysis(analysis: AnalysisResult): Promise<void> {
 export async function getHistory(): Promise<AnalysisResult[]> {
   const baseUrl = getApiUrl();
   const url = new URL("/api/analyses", baseUrl);
-  const res = await fetch(url.toString(), { credentials: "include" });
+  const res = await fetch(url.toString(), {
+    credentials: "include",
+    headers: authHeaders(),
+  });
   if (!res.ok) return [];
   const rows = await res.json();
   return rows.map((r: any) => r.data as AnalysisResult);
@@ -70,7 +78,10 @@ export async function saveDocument(
 export async function getDocuments(): Promise<SavedDocument[]> {
   const baseUrl = getApiUrl();
   const url = new URL("/api/documents", baseUrl);
-  const res = await fetch(url.toString(), { credentials: "include" });
+  const res = await fetch(url.toString(), {
+    credentials: "include",
+    headers: authHeaders(),
+  });
   if (!res.ok) return [];
   return res.json();
 }
@@ -93,7 +104,10 @@ export async function linkDocumentToAnalysis(
 export async function getProfile(): Promise<UserProfile> {
   const baseUrl = getApiUrl();
   const url = new URL("/api/user", baseUrl);
-  const res = await fetch(url.toString(), { credentials: "include" });
+  const res = await fetch(url.toString(), {
+    credentials: "include",
+    headers: authHeaders(),
+  });
   if (!res.ok) {
     return { name: "", createdAt: new Date().toISOString() };
   }
