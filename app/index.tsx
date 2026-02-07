@@ -256,8 +256,22 @@ export default function InputScreen() {
       );
 
       const result = await response.json();
+      console.log("[Analyze] Raw API response:", JSON.stringify(result));
 
-      if (!result || (!result.insights && !result.summary)) {
+      if (!result || typeof result !== "object") {
+        Alert.alert(
+          "Analysis Failed",
+          "The AI service did not return any insights. Please try again."
+        );
+        return;
+      }
+
+      const insights =
+        result.insights || result.analysis || result.output || result.response || "";
+      const summary =
+        result.summary || result.executiveSummary || result.executive_summary || "";
+
+      if (!insights && !summary) {
         Alert.alert(
           "Analysis Failed",
           "The AI service did not return any insights. Please try again."
@@ -271,8 +285,8 @@ export default function InputScreen() {
         date: new Date().toISOString(),
         financialData: data,
         ratios,
-        insights: cleanFormatting(result.insights),
-        summary: cleanFormatting(result.summary),
+        insights: cleanFormatting(insights),
+        summary: cleanFormatting(summary),
       };
 
       try {
