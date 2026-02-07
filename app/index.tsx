@@ -255,30 +255,38 @@ export default function InputScreen() {
         }
       );
 
-      const rawResult = await response.json();
-      console.log("[Analyze] Raw API response:", JSON.stringify(rawResult));
+      let insights = "";
+      let summary = "";
 
-      const result = Array.isArray(rawResult) ? rawResult[0] : rawResult;
+      if (includeSummary) {
+        const rawResult = await response.json();
+        console.log("[Analyze] Raw API response:", JSON.stringify(rawResult));
 
-      if (!result || typeof result !== "object") {
-        Alert.alert(
-          "Analysis Failed",
-          "The AI service did not return any insights. Please try again."
-        );
-        return;
-      }
+        const result = Array.isArray(rawResult) ? rawResult[0] : rawResult;
 
-      const insights =
-        result.insights || result.analysis || result.output || result.response || "";
-      const summary =
-        result.summary || result.executiveSummary || result.executive_summary || "";
+        if (!result || typeof result !== "object") {
+          Alert.alert(
+            "Analysis Failed",
+            "The AI service did not return any insights. Please try again."
+          );
+          return;
+        }
 
-      if (!insights && !summary) {
-        Alert.alert(
-          "Analysis Failed",
-          "The AI service did not return valid results. Please check your n8n workflow configuration for the includeSummary=false path."
-        );
-        return;
+        insights =
+          result.insights || result.analysis || result.output || result.response || "";
+        summary =
+          result.summary || result.executiveSummary || result.executive_summary || "";
+
+        if (!insights && !summary) {
+          Alert.alert(
+            "Analysis Failed",
+            "The AI service did not return valid results. Please try again."
+          );
+          return;
+        }
+
+        insights = cleanFormatting(insights);
+        summary = cleanFormatting(summary);
       }
 
       const analysisId = Crypto.randomUUID();
@@ -287,8 +295,8 @@ export default function InputScreen() {
         date: new Date().toISOString(),
         financialData: data,
         ratios,
-        insights: cleanFormatting(insights),
-        summary: includeSummary ? cleanFormatting(summary) : "",
+        insights,
+        summary,
       };
 
       try {
