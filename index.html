@@ -1,7 +1,7 @@
 <!doctype html>
 <html>
   <head>
-    <title>APP_NAME_PLACEHOLDER</title>
+    <title>VariaQ</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
@@ -336,7 +336,7 @@
       </div>
 
       <div class="content" id="content">
-        <h1>APP_NAME_PLACEHOLDER</h1>
+        <h1>VariaQ</h1>
         <p class="subtitle">Preview this app on your phone</p>
 
         <div class="steps-container">
@@ -385,8 +385,8 @@
             </div>
             <p class="step-description">Use your phone's camera or Expo Go</p>
             <div class="qr-code" id="qr-code"></div>
-            <a href="exps://EXPS_URL_PLACEHOLDER" class="open-button"
-              >Open in Expo Go</a
+            <a href="#" aria-disabled="true" onclick="return false;" class="open-button"
+              >Expo preview not published yet</a
             >
           </div>
         </div>
@@ -405,7 +405,7 @@
           /iPhone|iPad|iPod/i.test(ua) ||
           (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
-        const deepLink = "exps://EXPS_URL_PLACEHOLDER";
+        const deepLink = null; // Expo preview not published
 
         // Adjust store buttons based on platform
         const appStoreBtn = document.getElementById("app-store-btn");
@@ -420,6 +420,10 @@
           storeButtonsContainer.insertBefore(playStoreBtn, appStoreBtn);
         }
 
+        if (!deepLink) {
+          document.getElementById("qr-code").innerHTML =
+            '<p style="margin:0;padding:24px;color:#666;font-size:13px;">Expo QR unavailable until a preview URL is published.</p>';
+        } else {
         const qrCode = new QRCodeStyling({
           width: 400,
           height: 400,
@@ -443,8 +447,9 @@
         });
 
         qrCode.append(document.getElementById("qr-code"));
+        }
 
-        if (isAndroid || isIOS) {
+        if (deepLink && (isAndroid || isIOS)) {
           loadingEl.style.display = "block";
           contentEl.style.display = "none";
           window.location.href = deepLink;
